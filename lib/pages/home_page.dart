@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/printer.dart';
+import '../my_database.dart';
 
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key}) : super(key: key);
@@ -10,18 +11,18 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
-  List<Printer> _printers = [
-    Printer("Envy 5540", "192.168.0.47"),
-    Printer("Envy 3383", "192.168.0.112"),
-  ];
+  List<Printer> _printers = List<Printer>();
+
+  @override
+  void initState() {
+    MyDatabase.getPrinters().then((value) =>
+      setState(() {_printers = value;})
+    );
+    super.initState();
+  }
 
   void _incrementCounter() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
       _counter++;
     });
   }
