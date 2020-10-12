@@ -12,15 +12,50 @@ class MyDatabase {
     if (_db == null) {
       final databasePath = await getDatabasesPath();
       final path = join(databasePath, dbName);
-      _db = await openDatabase(path);
-      try {
-        await _db.execute(
-            "CREATE TABLE $table (id INTEGER PRIMARY KEY, name TEXT, url TEXT)");
-        await _db.rawInsert('INSERT INTO printers (name, url) VALUES (?, ?)', ['Envy 5540', '192.168.0.47']);
-        await _db.rawInsert('INSERT INTO printers (name, url) VALUES (?, ?)', ['Envy 3383', '192.168.0.112']);
-      }catch (e){
-        print("table already exists");
-      }
+      String query;
+      _db = await openDatabase(
+          path,
+          version: 2,
+          onUpgrade: (Database db, int oldVersion, int newVersion) async {
+            while (newVersion > oldVersion) {
+              switch (oldVersion) {
+                case 1:
+                  {
+                    query = "ALTER TABLE $table ADD COLUMN plan_name TEXT;"
+                        "ALTER TABLE $table ADD COLUMN pages_plan INT;"
+                        "ALTER TABLE $table ADD COLUMN pages_accum INT;"
+                        "ALTER TABLE $table ADD COLUMN pages_curr INT;"
+                        "ALTER TABLE $table ADD COLUMN invoicing_day INT";
+                    break;
+                  }
+              }
+              await db.execute(query);
+              oldVersion++;
+            }
+          },
+          onCreate: (Database db, int version) async {
+            switch (version) {
+              case 1:
+                {
+                  query =
+                  "CREATE TABLE $table (id INTEGER PRIMARY KEY, name TEXT, url TEXT)";
+                  break;
+                }
+              case 2:
+                {
+                  query =
+                  "CREATE TABLE $table (id INTEGER PRIMARY KEY, name TEXT, url TEXT, "
+                      "plan_name TEXT, pages_plan INT, pages_accum INT, pages_curr INT, invoicing_day INT)";
+                  break;
+                }
+              default:
+                query = null;
+            }
+            if (query != null) {
+              await db.execute(query);
+            }
+          }
+      );
     }
     return _db;
   }
@@ -30,15 +65,26 @@ class MyDatabase {
     var records = await (await db).query(table);
     if (records.length > 0) {
        records.forEach((element) {
-          result.add(Printer(element['name'], element['url']));
+          result.add(Printer(element['name'], element['url'], element['id']));
        });
     }
     return result;
   }
 
+  static Future<Printer> getPrinter(int id) async {
+    var records = await (await db).query(table, where: "id = ?", whereArgs: [id]);
+    if (records.length > 0) {
+      return Printer.fromMap(records[0]);
+    }
+    return null;
+  }
+
   static Future<bool> insertPrinter(Printer printer) async {
     var __db = await db;
-    var id = await __db.insert(table, {"name": printer.name, "url": printer.url});
+    if (printer.id != 0){
+      await __db.delete(table, where: "id = ?", whereArgs: [printer.id]);
+    }
+    var id = await __db.insert(table, printer.toMap());
     return id > 0;
   }
 }

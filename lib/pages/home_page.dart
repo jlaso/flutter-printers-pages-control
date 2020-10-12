@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/printer.dart';
-import '../my_database.dart';
+import '../utils/config.dart';
+import '../fluro_router.dart';
 
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key}) : super(key: key);
@@ -10,22 +10,10 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-  List<Printer> _printers = List<Printer>();
-
-  @override
-  void initState() {
-    MyDatabase.getPrinters().then((value) =>
-      setState(() {_printers = value;})
-    );
-    super.initState();
-  }
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
+  List<Map<String, String>> countries = [
+    {"flag": "es", "code": "es", "language": "es", "label": "España (Español)"},
+    {"flag": "gb", "code": "uk", "language": "en", "label": "United Kingdom (English)"},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -33,15 +21,18 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text("My printers"),
       ),
-      body: ListView.builder(
-        itemCount: _printers.length,
-        itemBuilder: _itemBuilder,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Add printer',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      body: Column(
+        children: <Widget>[
+          Padding(padding: EdgeInsets.only(top: 10.0)),
+          Center(child: Text("Select your country", style: TextStyle(fontSize: 20))),
+          Padding(padding: EdgeInsets.only(top: 10.0)),
+          Expanded(child: ListView.builder(
+            itemCount: countries.length,
+            itemBuilder: _itemBuilder,
+          ),
+          )
+        ]
+      )
     );
   }
 
@@ -52,17 +43,18 @@ class _MyHomePageState extends State<MyHomePage> {
             padding: EdgeInsets.all(8.0),
             child: Row(
               children: <Widget>[
-                CircleAvatar(child: Text("P")),
+                Image(image: AssetImage("assets/${countries[index]["flag"]}-flag.png")),
                 Padding(padding: EdgeInsets.only(right: 10.0)),
-                Text(_printers[index].name,
+                Text(countries[index]["label"],
                     style: TextStyle(fontSize: 20.0)),
-                Padding(padding: EdgeInsets.only(right: 10.0)),
-                Text(_printers[index].url,
-                    style: TextStyle(fontSize: 17.0)),
               ],
             )
         ),
-        onTap: () => Navigator.pushReplacementNamed(context, "/printer/$index"),
+        onTap: () {
+          var config = Config();
+          config.readProviderInfo(countries[index]["code"], countries[index]["language"]);
+          Navigator.pushReplacementNamed(context, Routes.printers);
+        }
       ),
     );
   }

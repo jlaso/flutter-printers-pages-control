@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/printer.dart';
+import '../models/plan.dart';
 import '../my_database.dart';
+import '../utils/config.dart';
+import '../fluro_router.dart';
 
 class PrinterPage extends StatefulWidget {
   PrinterPage({Key key, this.id}) : super(key: key);
@@ -8,95 +12,196 @@ class PrinterPage extends StatefulWidget {
   final String id;
 
   @override
-  _PrinterPageState createState() => _PrinterPageState();
+  _PrinterPageState createState() => _PrinterPageState(int.parse(id));
 }
 
 class _PrinterPageState extends State<PrinterPage> {
 
-  Printer printer = Printer("", "");
+  _PrinterPageState(this.id);
 
-  final nameController = TextEditingController();
+  Printer _printer = Printer(Printer.models[0], "");
 
-  final urlController = TextEditingController();
+  int id;
 
   final _formKey = GlobalKey<FormState>();
 
   @override
-  void dispose() {
-    // Clean up the controller when the widget is disposed.
-    nameController.dispose();
-    urlController.dispose();
-    super.dispose();
+  void initState() {
+    MyDatabase.getPrinter(this.id).then((value) {
+      print(value.toMap());
+      if (value != null) {
+        setState(() { _printer = value; });
+      }
+    });
+    super.initState();
   }
+
 
   @override
   Widget build(BuildContext context) {
+    var title = (widget.id == "0") ? "New printer" : 'This is printer ${widget.id}!';
+    var thePlans = Config().plans;
     return Scaffold(
       appBar: AppBar(
+        title: Text(title),
         leading: IconButton(
           icon: Icon(Icons.home),
           onPressed: () {
             // Navigator.of(context).pop();
-            Navigator.pushReplacementNamed(context, "/");
+            Navigator.pushReplacementNamed(context, Routes.printers);
           },
         ),
         actions: [
           IconButton(icon: Icon(Icons.save), onPressed: null),
         ],
-        title: Text('Home'),
       ),
-      body: Form(
-         key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Center(child: Text('This is printer ${widget.id}!')),
-              TextFormField(
-                autofocus: true,
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Printer model',
-                  hintText: 'Printer model/name',
-                ),
-                validator: (value) {
-                  if (value.isEmpty) {
-                    return 'Please enter some text';
+      body: Center(child: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.85,
+        child: Form(
+          key: _formKey,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+            Padding(padding: EdgeInsets.only(top: 20.0)),
+            DropdownButton<String>(
+              value: _printer.name,
+              icon: Icon(Icons.arrow_downward),
+              iconSize: 24,
+              elevation: 16,
+              style: TextStyle(color: Colors.deepPurple),
+              underline: Container(
+                height: 2,
+                color: Colors.deepPurpleAccent,
+              ),
+              onChanged: (String newValue) { setState(() { _printer.name = newValue;});},
+              items: Printer.models.map<DropdownMenuItem<String>>((String value) =>
+                DropdownMenuItem<String>(value: value, child: Text(value))).toList(),
+            ),
+            TextFormField(
+              key: Key("url" + _printer.url),
+              initialValue: _printer.url,
+              decoration: const InputDecoration(
+                labelText: 'Printer url',
+                hintText: 'IP or local domain of the printer',
+              ),
+              onChanged: (String value) { setState(() {_printer.url = value;});},
+              validator: (value) {
+                if (value.isEmpty) {
+                  return 'Please enter some IP or local domain';
+                }
+                return null;
+              },
+            ),
+            DropdownButton<String>(
+              key: Key(_printer.planName),
+              value: _printer.planName,
+              icon: Icon(Icons.arrow_downward),
+              iconSize: 24,
+              elevation: 16,
+              style: TextStyle(color: Colors.deepPurple),
+              underline: Container(
+                height: 2,
+                color: Colors.deepPurpleAccent,
+              ),
+              items: thePlans.map<DropdownMenuItem<String>>((Plan value) =>
+                 DropdownMenuItem<String>(child: Text(value.toString()), value: value.price)).toList(),
+              onChanged: (String newValue) {setState(() {_printer.planName = newValue;});},
+            ),
+            TextFormField(
+              key: Key("invoicing" + _printer.invoicingDay.toString()),
+              initialValue: _printer.invoicingDay.toString(),
+              decoration: const InputDecoration(
+                labelText: 'Invoicing Day',
+                hintText: 'They day of the month HP closes the invoice',
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (String value) { setState(() {_printer.invoicingDay = int.parse(value);});},
+              validator: (value) {
+                if (value.isEmpty) {
+                  return 'Please enter some number between 1 and 31';
+                }
+                try {
+                  var v = int.parse(value);
+                  if (v<1 || v>31){
+                    return "A number between 1 and 31, please";
                   }
-                  return null;
-                },
+                }catch(e){
+                  return "A number between 1 and 31, please";
+                }
+                return null;
+              },
+            ),
+            TextFormField(
+              key: Key("pagesCurr" + _printer.pagesCurr.toString()),
+              initialValue: _printer.pagesCurr.toString(),
+              decoration: const InputDecoration(
+                labelText: 'Current amount of pages',
+                hintText: 'The number of pages HP says you have already printed',
               ),
-              TextFormField(
-                controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: 'Printer url',
-                  hintText: 'IP or local domain of the printer',
-                ),
-                validator: (value) {
-                  if (value.isEmpty) {
-                    return 'Please enter some text';
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (String value) {setState(() {_printer.pagesCurr = int.parse(value);});},
+              validator: (value) {
+                if (value.isEmpty) {
+                  return 'Please enter some number greater than 1';
+                }
+                try {
+                  var v = int.parse(value);
+                  if (v<1){
+                    return "A number greater than 1, please";
                   }
-                  return null;
+                }catch(e){
+                  return "A number greater than 1, please";
+                }
+                return null;
+              },
+            ),
+            TextFormField(
+              key: Key("pagesAccum" + _printer.pagesAccum.toString()),
+              initialValue: _printer.pagesAccum.toString(),
+              decoration: const InputDecoration(
+                labelText: 'Pending pages from last months',
+                hintText: 'The number of pages you accumulate from last months according to HP',
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (String value) { setState(() { _printer.pagesAccum = int.parse(value); });},
+              validator: (value) {
+                if (value.isEmpty) {
+                  return 'Please enter some number';
+                }
+                try {
+                  var v = int.parse(value);
+                }catch(e){
+                  return "A number, please";
+                }
+                return null;
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (_formKey.currentState.validate()) {
+                    await MyDatabase.insertPrinter(_printer).then((value) => {
+                          if (value)
+                            {Navigator.pushReplacementNamed(context, Routes.printers)}
+                        });
+                  }
                 },
+                child: Text('Submit'),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (_formKey.currentState.validate()) {
-                      printer.name = nameController.text;
-                      printer.url = urlController.text;
-                      await MyDatabase.insertPrinter(printer).then((value) => {
-                         if (value) {
-                            Navigator.pushReplacementNamed(context, "/")
-                         }
-                      });
-                    }
-                  },
-                  child: Text('Submit'),
-                ),
-              ),
-            ]
-          ),
+            ),
+          ]),
+        ),
+      ),
       ),
     );
   }
