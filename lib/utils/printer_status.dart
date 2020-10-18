@@ -2,45 +2,51 @@ import 'package:xml/xml.dart';
 import 'package:http/http.dart' as http;
 import '../models/printer.dart';
 
+/// the current time, in “seconds since the epoch”
+int currentTimeInSeconds() {
+  var ms = (new DateTime.now()).millisecondsSinceEpoch;
+  return (ms / 1000).round();
+}
+
+
 class PrinterStatus {
 
-  PrinterStatus(this.printer);
+  PrinterStatus(this.printer){
+    totalPages = 0;
+    serialNumber = "";
+  }
 
   Printer printer;
   int totalPages;
   String serialNumber;
 
-  Future<bool> update() async {
-    final url = PrinterStatus.getUrl(printer);
-    if (url == null) return false;
-    final response = await http.get("http://" + printer.url + "/" + url);
+  Future<http.Response> getData(String type) {
+    var url = "";
+    if (type == "product-config") {
+      url = "/DevMgmt/ProductConfigDyn.xml";
+    }else if (type == "product-usage") {
+      url = "/DevMgmt/ProductUsageDyn.xml";
+    }
+    return http.get("http://" + printer.url + url);
+  }
+
+  Future<void> update() async {
+    var response = await getData("product-usage");
     if (response.statusCode == 200) {
       final document = XmlDocument.parse(response.body);
       totalPages = int.parse(
           document.getElement("pudyn:ProductUsageDyn", namespace: null)
           .getElement("pudyn:PrinterSubunit", namespace: null)
           .getElement("dd:TotalImpressions", namespace: null).text);
-      return true;
     }
-    return false;
+    var response2 = await getData("product-config");
+    if (response2.statusCode == 200) {
+      final document2 = XmlDocument.parse(response2.body);
+      serialNumber = document2.getElement("prdcfgdyn2:ProductConfigDyn", namespace: null)
+          .getElement("prdcfgdyn:ProductInformation", namespace: null)
+          .getElement("dd:SerialNumber", namespace: null).text;
+    }
   }
 
-  static String getUrl(Printer p) {
-    switch (p.name) {
-      case "Envy 5540":
-        {
-          return "DevMgmt/ProductUsageDyn.xml";
-        }
-      default:
-        return null;
-    }
-  }
 }
 
-// void main() {
-//   final p = Printer("Envy 5540", "192.168.1.47");
-//   var ps = PrinterStatus(p);
-//   ps.update().then((value) {
-//     print(ps.totalPages);
-//   });
-// }

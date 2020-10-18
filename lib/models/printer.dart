@@ -1,3 +1,12 @@
+import '../utils/printer_status.dart';
+
+class PagesLeft {
+  int currentMonth;
+  int accumulated;
+
+  PagesLeft(this.currentMonth, this.accumulated);
+}
+
 class Printer {
   int id;
   String name;
@@ -7,8 +16,21 @@ class Printer {
   int pagesAccum = 0;
   int pagesCurr = 0;
   int invoicingDay = 1;
+  int lastGrandTotal = 0;
+  int lastDayChecked = 0;
 
-  Printer(this.name, this.url, [ this.id ]);
+  Printer(this.name, this.url, [ this.id ]){
+    status = PrinterStatus(this);
+  }
+
+  PrinterStatus status;
+
+  PagesLeft pagesLeft() {
+    var currentMonth = pagesPlan - (status.totalPages - lastGrandTotal);
+    var accumulated = pagesAccum;
+
+    return PagesLeft(currentMonth, accumulated);
+  }
 
   static const models = <String>["Envy 5540", "Envy 3383"];
 
@@ -19,6 +41,8 @@ class Printer {
     p.pagesCurr = v["pages_curr"];
     p.pagesPlan = v["pages_plan"];
     p.planName = v["plan_name"];
+    p.lastDayChecked = v["last_day_checked"];
+    p.lastGrandTotal = v["last_grand_total"];
     return p;
   }
 
@@ -32,6 +56,8 @@ class Printer {
       "pages_curr": pagesCurr,
       "pages_accum": pagesAccum,
       "invoicing_day": invoicingDay,
+      "last_day_checked": lastDayChecked,
+      "last_grand_total": lastGrandTotal,
     };
   }
 

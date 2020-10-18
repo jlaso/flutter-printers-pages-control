@@ -24,13 +24,33 @@ class _PrinterPageState extends State<PrinterPage> {
   int id;
 
   final _formKey = GlobalKey<FormState>();
+  final _urlCtrl = TextEditingController();
+  final _invDayCtrl = TextEditingController();
+  final _currPagCtrl = TextEditingController();
+  final _accumPagCtrl = TextEditingController();
+
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _invDayCtrl.dispose();
+    _currPagCtrl.dispose();
+    _accumPagCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     MyDatabase.getPrinter(this.id).then((value) {
-      print(value.toMap());
       if (value != null) {
-        setState(() { _printer = value; });
+        print(value.toMap());
+        setState(() {
+          _printer = value;
+          _accumPagCtrl.text = _printer.pagesAccum.toString();
+          _urlCtrl.text = _printer.url;
+          _currPagCtrl.text = _printer.pagesCurr.toString();
+          _invDayCtrl.text = _printer.invoicingDay.toString();
+        });
       }
     });
     super.initState();
@@ -41,6 +61,16 @@ class _PrinterPageState extends State<PrinterPage> {
   Widget build(BuildContext context) {
     var title = (widget.id == "0") ? "New printer" : 'This is printer ${widget.id}!';
     var thePlans = Config().plans;
+
+    int pagesFromPlanPricing(price) {
+      for (int p=0;p<thePlans.length;p++) {
+        if (thePlans[p].price == price){
+          return thePlans[p].pages;
+        }
+      }
+      return 0;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -79,12 +109,13 @@ class _PrinterPageState extends State<PrinterPage> {
             ),
             TextFormField(
               key: Key("url" + _printer.url),
-              initialValue: _printer.url,
+              controller: _urlCtrl,
+              // initialValue: _printer.url,
               decoration: const InputDecoration(
                 labelText: 'Printer url',
                 hintText: 'IP or local domain of the printer',
               ),
-              onChanged: (String value) { setState(() {_printer.url = value;});},
+              // onChanged: (String value) { setState(() {_printer.url = value;});},
               validator: (value) {
                 if (value.isEmpty) {
                   return 'Please enter some IP or local domain';
@@ -105,11 +136,17 @@ class _PrinterPageState extends State<PrinterPage> {
               ),
               items: thePlans.map<DropdownMenuItem<String>>((Plan value) =>
                  DropdownMenuItem<String>(child: Text(value.toString()), value: value.price)).toList(),
-              onChanged: (String newValue) {setState(() {_printer.planName = newValue;});},
+              onChanged: (String newValue) {
+                setState(() {
+                  _printer.planName = newValue;
+                  _printer.pagesPlan = pagesFromPlanPricing(newValue);
+                });
+              },
             ),
             TextFormField(
               key: Key("invoicing" + _printer.invoicingDay.toString()),
-              initialValue: _printer.invoicingDay.toString(),
+              controller: _invDayCtrl,
+              //initialValue: _printer.invoicingDay.toString(),
               decoration: const InputDecoration(
                 labelText: 'Invoicing Day',
                 hintText: 'They day of the month HP closes the invoice',
@@ -118,7 +155,7 @@ class _PrinterPageState extends State<PrinterPage> {
               inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
               ],
-              onChanged: (String value) { setState(() {_printer.invoicingDay = int.parse(value);});},
+              // onChanged: (String value) { setState(() {_printer.invoicingDay = int.parse(value);});},
               validator: (value) {
                 if (value.isEmpty) {
                   return 'Please enter some number between 1 and 31';
@@ -136,7 +173,8 @@ class _PrinterPageState extends State<PrinterPage> {
             ),
             TextFormField(
               key: Key("pagesCurr" + _printer.pagesCurr.toString()),
-              initialValue: _printer.pagesCurr.toString(),
+              controller: _currPagCtrl,
+              //initialValue: _printer.pagesCurr.toString(),
               decoration: const InputDecoration(
                 labelText: 'Current amount of pages',
                 hintText: 'The number of pages HP says you have already printed',
@@ -145,7 +183,7 @@ class _PrinterPageState extends State<PrinterPage> {
               inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
               ],
-              onChanged: (String value) {setState(() {_printer.pagesCurr = int.parse(value);});},
+              // onChanged: (String value) {setState(() {_printer.pagesCurr = int.parse(value);});},
               validator: (value) {
                 if (value.isEmpty) {
                   return 'Please enter some number greater than 1';
@@ -163,7 +201,8 @@ class _PrinterPageState extends State<PrinterPage> {
             ),
             TextFormField(
               key: Key("pagesAccum" + _printer.pagesAccum.toString()),
-              initialValue: _printer.pagesAccum.toString(),
+              controller: _accumPagCtrl,
+              //initialValue: _printer.pagesAccum.toString(),
               decoration: const InputDecoration(
                 labelText: 'Pending pages from last months',
                 hintText: 'The number of pages you accumulate from last months according to HP',
@@ -172,7 +211,7 @@ class _PrinterPageState extends State<PrinterPage> {
               inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
               ],
-              onChanged: (String value) { setState(() { _printer.pagesAccum = int.parse(value); });},
+              //onChanged: (String value) { setState(() { _printer.pagesAccum = int.parse(value); });},
               validator: (value) {
                 if (value.isEmpty) {
                   return 'Please enter some number';
@@ -190,6 +229,11 @@ class _PrinterPageState extends State<PrinterPage> {
               child: ElevatedButton(
                 onPressed: () async {
                   if (_formKey.currentState.validate()) {
+                    _printer.url = _urlCtrl.text;
+                    _printer.pagesAccum = int.parse(_accumPagCtrl.text);
+                    _printer.pagesCurr = int.parse(_currPagCtrl.text);
+                    _printer.lastGrandTotal = _printer.status.totalPages;
+                    _printer.lastDayChecked = DateTime.now().day;
                     await MyDatabase.insertPrinter(_printer).then((value) => {
                           if (value)
                             {Navigator.pushReplacementNamed(context, Routes.printers)}

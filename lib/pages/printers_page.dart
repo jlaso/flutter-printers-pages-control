@@ -3,7 +3,8 @@ import 'dart:async';
 import '../models/printer.dart';
 import '../my_database.dart';
 import '../fluro_router.dart';
-import '../utils/printer_status.dart';
+
+const TIMER_SECONDS = 60;
 
 class PrintersPage extends StatefulWidget {
   PrintersPage({Key key}) : super(key: key);
@@ -13,41 +14,29 @@ class PrintersPage extends StatefulWidget {
 }
 
 class _PrintersPageState extends State<PrintersPage> {
-  List<Printer> _printers = List<Printer>();
-  Map<String, PrinterStatus> statuses = Map<String, PrinterStatus>();
+  Future<List<Printer>> printers;
   Timer timer;
 
   @override
   void initState() {
-    MyDatabase.getPrinters().then((value) {
-        setState(() { _printers = value;});
-        value.forEach((printer) {
-            statuses[printer.url] = PrinterStatus(printer);
-        });
-        updatePrinterStatuses();
-    });
     super.initState();
+    printers = MyDatabase.getPrinters();
+    updatePrinterStatuses();
   }
 
   void updatePrinterStatuses() async{
     timer?.cancel();
-    _printers.forEach((printer) async {
-      print("getting info of $printer");
-        await statuses[printer.url].update();
+    printers.then((value) {
+      value.forEach((printer) async {
+        await printer.status.update();
+      });
+      Future.delayed(Duration(seconds:1), () {
+        setState(() {
+          timer = Timer.periodic(Duration(seconds:TIMER_SECONDS),
+                  (Timer t) => updatePrinterStatuses());
+        });
+      });
     });
-    timer = Timer.periodic(Duration(seconds:60), (Timer t) => updatePrinterStatuses());
-  }
-
-  String pStatus(index) {
-    var url = _printers[index].url;
-    if (statuses == null || !statuses.containsKey(url)) {
-      return "";
-    }
-    var s = statuses[url];
-    if (s is PrinterStatus) {
-      return s.totalPages.toString();
-    }
-    return "";
   }
 
   @override
@@ -63,10 +52,7 @@ class _PrintersPageState extends State<PrintersPage> {
         leading: BackButton(onPressed: () {Navigator.pushReplacementNamed(context, Routes.home);},),
         title: Text("My printers"),
       ),
-      body: ListView.builder(
-        itemCount: _printers.length,
-        itemBuilder: _itemBuilder,
-      ),
+      body: fbuilder(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.pushReplacementNamed(context, Routes.printerId(0)),
         tooltip: 'Add printer',
@@ -75,28 +61,53 @@ class _PrintersPageState extends State<PrintersPage> {
     );
   }
 
-  Widget _itemBuilder(BuildContext context, int index) {
-    return Card(
-      child: InkWell(
-        child: Container(
-            padding: EdgeInsets.all(8.0),
-            child: Row(
-              children: <Widget>[
-                CircleAvatar(child: Icon(Icons.print)),
-                Padding(padding: EdgeInsets.only(right: 10.0)),
-                Text(_printers[index].name,
-                    style: TextStyle(fontSize: 20.0)),
-                Padding(padding: EdgeInsets.only(right: 10.0)),
-                Text(_printers[index].url,
-                    style: TextStyle(fontSize: 17.0)),
-                Padding(padding: EdgeInsets.only(right: 10.0)),
-                Text(pStatus(index), key: Key("status$index"),
-                    style: TextStyle(fontSize: 17.0)),
-              ],
-            )
-        ),
-        onTap: () => Navigator.pushReplacementNamed(context, Routes.printerId(_printers[index].id)),
-      ),
-    );
+  Widget fbuilder() {
+    return FutureBuilder<List<Printer>>(
+      future: printers,
+      builder: (BuildContext context, printersSnap) {
+        // print("hasData ${printersSnap.hasData}");
+        if (!printersSnap.hasData || printersSnap.data == null)
+          return Center(child: CircularProgressIndicator());
+        return ListView.builder(
+          itemCount: printersSnap.data.length,
+          itemBuilder: (BuildContext context, int index) {
+            var printer = printersSnap.data[index];
+            return Card(
+              child: InkWell(
+                child: Container(
+                    padding: EdgeInsets.all(8.0),
+                    child: Row(
+                      key: Key("row$index"),
+                      // mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: <Widget>[
+                        CircleAvatar(child: Icon(Icons.print)),
+                        Padding(padding: EdgeInsets.only(right: 10.0)),
+                        Text(printer.name,
+                            style: TextStyle(fontSize: 20.0)),
+                        Padding(padding: EdgeInsets.only(right: 20.0)),
+                        Text("url: "+ printer.url,
+                            style: TextStyle(fontSize: 17.0)),
+                        Padding(padding: EdgeInsets.only(right: 10.0)),
+                        Text("SN: "+ printer.status.serialNumber,
+                            style: TextStyle(fontSize: 17.0)),
+                        Padding(padding: EdgeInsets.only(right: 10.0)),
+                        Expanded(
+                          child: Text(
+                              "pages: " + printer.pagesLeft().currentMonth.toString(),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(fontSize: 17.0)),
+                        )
+                      ],
+                    )
+                ),
+                onTap: () =>
+                    Navigator.pushReplacementNamed(
+                        context, Routes.printerId(printer.id)),
+              ),
+            );
+          },
+        );
+      });
   }
+
 }

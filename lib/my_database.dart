@@ -15,8 +15,9 @@ class MyDatabase {
       String query;
       _db = await openDatabase(
           path,
-          version: 2,
+          version: 3,
           onUpgrade: (Database db, int oldVersion, int newVersion) async {
+            print("version $oldVersion => $newVersion");
             while (newVersion > oldVersion) {
               switch (oldVersion) {
                 case 1:
@@ -28,12 +29,19 @@ class MyDatabase {
                         "ALTER TABLE $table ADD COLUMN invoicing_day INT";
                     break;
                   }
+                case 2:
+                  {
+                    query = "ALTER TABLE $table ADD COLUMN last_day_checked INT DEFAULT 0;"
+                        "ALTER TABLE $table ADD COLUMN last_grand_total INT DEFAULT 0;";
+                    break;
+                  }
               }
               await db.execute(query);
               oldVersion++;
             }
           },
           onCreate: (Database db, int version) async {
+            print("version $version");
             switch (version) {
               case 1:
                 {
@@ -45,7 +53,17 @@ class MyDatabase {
                 {
                   query =
                   "CREATE TABLE $table (id INTEGER PRIMARY KEY, name TEXT, url TEXT, "
-                      "plan_name TEXT, pages_plan INT, pages_accum INT, pages_curr INT, invoicing_day INT)";
+                      "plan_name TEXT, pages_plan INT, pages_accum INT, pages_curr INT, "
+                      "invoicing_day INT)";
+                  break;
+                }
+              case 3:
+                {
+                  query =
+                  "CREATE TABLE $table (id INTEGER PRIMARY KEY, name TEXT, url TEXT, "
+                      "plan_name TEXT, pages_plan INT, pages_accum INT, pages_curr INT,"
+                      "invoicing_day INT, last_day_checked INT DEFAULT 0, "
+                      "last_grand_total INT DEFAULT 0)";
                   break;
                 }
               default:
@@ -68,7 +86,8 @@ class MyDatabase {
           result.add(Printer(element['name'], element['url'], element['id']));
        });
     }
-    return result;
+    return Future.delayed(Duration(seconds:2), () => result);
+    // return result;
   }
 
   static Future<Printer> getPrinter(int id) async {
